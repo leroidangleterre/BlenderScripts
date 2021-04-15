@@ -5,7 +5,7 @@ import bpy
 import math
 import mathutils
 
-nbLines = 10
+nbLines = 20
 nbCols = 10
 
 x = 0
@@ -15,6 +15,8 @@ nbTileTypes = 4
 tileSize = 10
 
 cloneLayer = 15
+
+pi = math.pi
 
 random.seed()
 
@@ -29,26 +31,64 @@ for i in range(1,20):
     
 
 
-def clonePart(initPart, name, scene, newLocation):
+def clonePart(initPart, name, scene, currentLocation):
     me_new = bpy.data.meshes.new(name)
     ob_new = bpy.data.objects.new(name,me_new)
     ob_new.data = initPart.data.copy()
-    ob_new.location = newLocation
     ob_new.parent = bpy.data.objects["Empty.World"]
+
+    # Randomly rotate the tile
+    angle = random.randrange(4) * math.radians(90)
+    ob_new.rotation_euler[2] = angle
+    
+    # Test: spherical effect
+
+    # Part location
+    #x = newLocation[0]
+    #y = newLocation[1]
+    #z = 50*(math.cos(math.sqrt(x*x+y*y)/60) - 1)
+    #ob_new.location[2] = z
+    
+    # Torus effect
+    R0 = 100
+    R1 = 10
+    
+    H = nbLines * tileSize
+    L = nbCols * tileSize
+    
+    x0 = currentLocation[0]
+    y0 = currentLocation[1]
+    
+    x1 = -R1 * math.sin(2*pi*y0/H) + R0
+    y1 = 0
+    z1 = R1 * math.cos(2*pi*y0/H)
+    
+    xf = x1 * math.cos(2*pi*x0/L)
+    yf = x1 * math.sin(2*pi*x0/L)
+    zf = z1
+    
+    ob_new.location[0]=xf
+    ob_new.location[1]=yf
+    ob_new.location[2]=zf
+    
+    
+
     bpy.context.scene.objects.link(ob_new)
 
 
 
 
-for i in range(1, nbCols):
+for i in range(0, nbCols):
     print("Creating row " + str(i) + " of " + str(nbCols))
-    for j in range(1, nbLines):
+    for j in range(0, nbLines):
 
         try:
             randomVal = random.randrange(nbTileTypes)
             
             # Choose the tile that is being cloned.
-            originalTile = bpy.data.objects["Empty.Panels.Initial.4"].children[randomVal]
+            #originalTile = bpy.data.objects["Empty.Panels.Initial.4"].children[randomVal]
+            # Test: clone only a sphere
+            originalTile = bpy.data.objects["Empty.test.balls"].children[0]
             originalName = originalTile.name
             originalData = originalTile.data
             print("Cloning " + str(originalTile) + " of name " + originalName)
@@ -75,10 +115,6 @@ for i in range(1, nbCols):
 
                 #clone = bpy.context.active_object
                 #clone.location = (x, y, 0)
-                
-                # Randomly rotate the tile
-                #angle = random.randrange(4) * math.radians(90)
-                #newTile.rotation_euler[2] = angle
                 
                 # Clear the parent of the new tile
                 #bpy.ops.object.parent_clear(type='CLEAR')
