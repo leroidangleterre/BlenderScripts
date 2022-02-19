@@ -4,78 +4,91 @@ import random
 import bpy
 import math
 import mathutils
+import numpy
 
-nbLines = 20
-nbCols = 10
+# needed for matrices ?
+from math import *
+from mathutils import *
+
 
 x = 0
 y = 0
 
-nbTileTypes = 4
-tileSize = 10
+nbTileTypes = 9
+tileSize = 1
 
-cloneLayer = 15
 
 pi = math.pi
 
 random.seed()
 
-# Save the active layers and deactivate all of them except for the clones layer.
-activeLayers = [False]*20
-for i in range(1,20):
-    activeLayers[i] = bpy.context.scene.layers[i]
-    if(i == cloneLayer):
-        bpy.context.scene.layers[i] = True;
-    else:
-        bpy.context.scene.layers[i] = False;
-    
+nbLines = 16
+nbCols = 16
 
+# Torus physical dimensions
+R0 = 50
+R1 = 10
+# Amount of tiles in rings
+nbLines = int(2*pi*R1 / tileSize) # Length of small ring
+nbCols = int(2*pi*R0 / tileSize) # Length of large ring
+print(str(nbLines) + " lines, " + str(nbCols) + " columns.")
+
+x = 0
+y = 0
+
+Rpos = Matrix.Translation((1,0,0))
+MrotX = Matrix.Rotation(pi/2, 4, 'X')
+MrotY = Matrix.Rotation(pi/2, 4, 'Y')
+MrotZ = Matrix.Rotation(pi/2, 4, 'Z')
+MrotTotal = numpy.matmul(numpy.matmul(MrotX, MrotY), MrotZ)
 
 def clonePart(initPart, name, scene, currentLocation):
+    # print("Calling clonePart()")
     me_new = bpy.data.meshes.new(name)
-    ob_new = bpy.data.objects.new(name,me_new)
-    ob_new.data = initPart.data.copy()
-    ob_new.parent = bpy.data.objects["Empty.World"]
+    copy = bpy.data.objects.new(name,me_new)
+    copy.data = initPart.data.copy()
+    copy.parent = bpy.data.objects["Empty.World"]
 
-    # Randomly rotate the tile
-    angle = random.randrange(4) * math.radians(90)
-    ob_new.rotation_euler[2] = angle
-    
-    # Test: spherical effect
-
-    # Part location
-    #x = newLocation[0]
-    #y = newLocation[1]
-    #z = 50*(math.cos(math.sqrt(x*x+y*y)/60) - 1)
-    #ob_new.location[2] = z
-    
-    # Torus effect
-    R0 = 100
-    R1 = 10
     
     H = nbLines * tileSize
     L = nbCols * tileSize
     
+    ##########################################
     x0 = currentLocation[0]
     y0 = currentLocation[1]
+    z0 = currentLocation[2]
     
-    x1 = -R1 * math.sin(2*pi*y0/H) + R0
-    y1 = 0
-    z1 = R1 * math.cos(2*pi*y0/H)
+    x = (R0 + R1 * sin(2*pi*y0/H)) * sin(2*pi*x0/L)
+    y = R1 * cos(2*pi*y0/H)
+    z = (R0 + R1 * sin(2*pi*y0/H)) * cos(2*pi*x0/L)
     
-    xf = x1 * math.cos(2*pi*x0/L)
-    yf = x1 * math.sin(2*pi*x0/L)
-    zf = z1
+    copy.name = newName
+    parent = bpy.data.objects['Empty.World']
+    copy.parent = parent
+    # The init tile is not rendered, but the copy must be.
+    copy.hide_render = False
+    ##########################################
     
-    ob_new.location[0]=xf
-    ob_new.location[1]=yf
-    ob_new.location[2]=zf
+    
+    copy.location[0]=x
+    copy.location[1]=y
+    copy.location[2]=z
+    
+    angleX = 2*pi*y0/H - pi/2
+    angleZ = 2*pi*x0/L
+    
+    Rx = mathutils.Matrix.Rotation(angleX, 3, 'X')
+    Rz = mathutils.Matrix.Rotation(angleZ, 3, 'Z')
+    R = Rz * Rx
+    #copy.setMatrix(copy.matrix * R)
+    
+    copy.rotation_euler.rotate_axis('Y', angleZ)
+    copy.rotation_euler.rotate_axis('X', angleX)
     
     
-
-    bpy.context.scene.objects.link(ob_new)
-
-
+    bpy.data.collections['Cloned_tiles'].objects.link(copy)
+    #bpy.context.scene.objects.link(ob_new)
+    
 
 
 for i in range(0, nbCols):
@@ -88,50 +101,29 @@ for i in range(0, nbCols):
             # Choose the tile that is being cloned.
             #originalTile = bpy.data.objects["Empty.Panels.Initial.4"].children[randomVal]
             # Test: clone only a sphere
-            originalTile = bpy.data.objects["Empty.test.balls"].children[0]
+            tile_collection = bpy.data.collections.get("Tiles")
+            #print("Collection: " + str(tile_collection))
+            
+            tile_name = "Tile.init.00" + str(randomVal)
+            #print("Looking for tile " + tile_name)
+            originalTile = tile_collection.all_objects.get(tile_name)
+            
             originalName = originalTile.name
             originalData = originalTile.data
-            print("Cloning " + str(originalTile) + " of name " + originalName)
-            
-            #bpy.data.objects[tilename].select = True
-            #bpy.context.scene.objects.active = bpy.data.objects[tilename]
 
             x = (i - nbCols/2) * tileSize
             y = (j - nbLines/2) * tileSize
 
-            # Do not replace the tile that contains the TV screen.
-            if not(i==nbCols/2 and j==nbLines/2):
-                # Duplicate the tile
-                
-                newName = "Tile_" + str(i) + "_" + str(j)
-                newLocation = mathutils.Vector((x, y, 0))
-                clonePart(originalTile, newName, bpy.ops.scene, newLocation)
-                
-                #newMesh = bpy.data.meshes.new(originalName)
-                #print(" copied mesh: " + str(newMesh))
-                #newObject = bpy.data.objects.new(newName, originalTile)
-                #bpy.context.scene.objects.link(newObject)
-
-
-                #clone = bpy.context.active_object
-                #clone.location = (x, y, 0)
-                
-                # Clear the parent of the new tile
-                #bpy.ops.object.parent_clear(type='CLEAR')
-                
-                # Move the new tile to the last layer
-                #OBJECT_OT_move_to_layer(bpy.data.window_managers["WinMan"])
-                #tile = Blender.Object.Get('
-                
-                # Deselect everything
-                bpy.ops.object.select_all(action='DESELECT')
+            # Duplicate the tile
+            newName = "Tile_" + str(i) + "_" + str(j)
+            newLocation = mathutils.Vector((x, y, 0))
+            clonePart(originalTile, newName, bpy.ops.scene, newLocation)
+            
         except KeyError:
             print("key not found...")
 
 # Reset the active layers.
-for i in range(1,20):
-    bpy.context.scene.layers[i] = activeLayers[i]
-
-
+#for i in range(1,20):
+#    bpy.context.scene.layers[i] = activeLayers[i]
 
 
