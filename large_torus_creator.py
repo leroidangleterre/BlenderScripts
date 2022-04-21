@@ -5,17 +5,31 @@
 import bpy
 from bpy.app.translations import pgettext_data as data_
 from bpy_extras import object_utils
+from math import pi
 
 
 
 
-major_radius = 35.0
-minor_radius = 5.0
-major_segments = 1000
-minor_segments = 125
+major_radius = 80
+minor_radius = 10.0
+major_segments = 1250
+minor_segments = 140
 generate_uvs = True
+trench_width = 6
+trench_segments = 3
+tile_size = 2*pi*minor_radius/minor_segments
+trench_height = trench_segments * tile_size
 
 
+indexB = int(trench_width/2)
+indexC = int(trench_width/2 + trench_segments)
+indexF = int(minor_segments + 2*trench_segments)
+
+# actual number of minor segments must take trench into account
+minor_segments_total = int(minor_segments + 2*trench_segments)
+
+indexD = minor_segments_total - indexC
+indexE = minor_segments_total - indexB
 
 def add_uvs(mesh, minor_seg, major_seg):
     from math import fmod
@@ -64,6 +78,44 @@ def add_uvs(mesh, minor_seg, major_seg):
         u_next = u_prev + u_step
 
 
+def get_angle(minor_index, minor_seg):
+    from math import cos, sin, pi
+    #print("minor_index: " + str(minor_index))
+    # Original version for regular torus
+    #return 2*pi * minor_index / minor_seg
+    if minor_index <= indexB:
+        return 2*pi*minor_index/minor_segments
+    if minor_index <= indexC:
+        angleBC = 2*pi*indexB/minor_segments
+        return angleBC
+    if minor_index <= indexD:
+        return 2*pi*(minor_index-trench_segments)/minor_segments
+    if minor_index <= indexE:
+        angleBC = 2*pi*indexB/minor_segments
+        #angleDE = 2*pi*(indexD-trench_segments)/minor_segments
+        angleDE = -angleBC
+        return angleDE
+    angleEF = 2*pi*(minor_index-trench_width)/minor_segments
+    return angleEF
+    
+    
+    
+
+def get_radius(minor_index, minor_seg):
+    # Original version for regular torus
+    #return minor_radius
+    
+    if minor_index <= indexB:
+        return minor_radius - trench_height
+    if minor_index <= indexC:
+        return (minor_radius - trench_height) + trench_height*(minor_index-indexB)/(indexC-indexB)
+    if minor_index <= indexD:
+        return minor_radius
+    if minor_index <= indexE:
+        return minor_radius - trench_height*(minor_index-indexD)/(indexE-indexD)
+    return minor_radius - trench_height
+
+
 
 def add_torus(major_rad, minor_rad, major_seg, minor_seg):
     from math import cos, sin, pi
@@ -71,31 +123,38 @@ def add_torus(major_rad, minor_rad, major_seg, minor_seg):
 
     pi_2 = pi * 2.0
 
+
     verts = []
     faces = []
     i1 = 0
-    tot_verts = major_seg * minor_seg
+    tot_verts = major_seg * minor_segments_total
     for major_index in range(major_seg):
         matrix = Matrix.Rotation((major_index / major_seg) * pi_2, 3, 'Z')
 
-        for minor_index in range(minor_seg):
-            angle = pi_2 * minor_index / minor_seg
+        for minor_index in range(minor_segments_total):
+            angle = pi_2 * minor_index / minor_segments_total
+            
+            # Custom version (used to build trench)
+            angle = get_angle(minor_index, minor_segments_total)
+            current_minor_rad = get_radius(minor_index, minor_segments_total)
 
+            
             vec = matrix @ Vector((
-                major_rad + (cos(angle) * minor_rad),
+                major_rad + (cos(angle) * current_minor_rad),
                 0.0,
-                sin(angle) * minor_rad,
+                sin(angle) * current_minor_rad,
             ))
+            
 
             verts.extend(vec[:])
 
-            if minor_index + 1 == minor_seg:
-                i2 = (major_index) * minor_seg
-                i3 = i1 + minor_seg
-                i4 = i2 + minor_seg
+            if minor_index + 1 == minor_segments_total:
+                i2 = (major_index) * minor_segments_total
+                i3 = i1 + minor_segments_total
+                i4 = i2 + minor_segments_total
             else:
                 i2 = i1 + 1
-                i3 = i1 + minor_seg
+                i3 = i1 + minor_segments_total
                 i4 = i3 + 1
 
             if i2 >= tot_verts:
